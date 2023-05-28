@@ -1,6 +1,10 @@
 #ifndef VM_H
 #define VM_H
 
+
+#include "stack.h"
+#include <stdint.h>
+
 // 
 // Mov
 // 0000_1 
@@ -47,11 +51,15 @@ typedef enum {
     SHIFTRIGHT
 } arithmetic_set_t;
 
-
-#include "stack.h"
-#include <stdint.h>
-
-
+typedef enum {
+    ALWAYS,
+    EQUAL,
+    DIFF,
+    SUP,
+    UNSIGNED_SUP,
+    INF,
+    UNSIGNED_INF
+} condition_code_t;
 
 typedef uint64_t reg_t;
 typedef uint64_t freg_t;
