@@ -33,23 +33,42 @@
 
 // + - * / >> << % 
 
+typedef uint64_t reg_t;
+typedef uint64_t freg_t;
+typedef uint32_t instruction_t;
+
+const uint32_t OPCODE_MASK = 0b11111000000000000000000000000000;
+const uint32_t INSTRUCTION_SIZE = 32;
+const uint32_t OPCODE_SIZE = 5;
+const uint32_t CONDITION_CODE_SIZE = 4;
+const uint32_t REGISTER_SIZE = 5;
+
 typedef enum {
     HALT = 0,
-    MOV = 1,
-    MOVN = 2,
-    ARI = 3,
-} instruction_set_t;
-
-
-typedef enum {
-    ADD = 1,
-    SUB,
-    MULt,
+    NOT = 1,
+    NEG = 2,
+    MV = 3,
+    MVN = 4,
+    MVA = 5,
+    BR_JUMP = 6,
+    LEA = 7,
+    ADD = 8,
+    SUB = 9,
+    MULT,
     DIV,
-    MODULO,
-    SHIFTLEFT,
-    SHIFTRIGHT
-} arithmetic_set_t;
+    MOD,
+    AND,
+    OR,
+    XOR,
+    LSL,
+    LSR,
+    ASR,
+    CMP, 
+    CSET,
+    LDR,
+    STR
+} opcode_t;
+
 
 typedef enum {
     ALWAYS,
@@ -61,9 +80,6 @@ typedef enum {
     UNSIGNED_INF
 } condition_code_t;
 
-typedef uint64_t reg_t;
-typedef uint64_t freg_t;
-typedef uint32_t instruction_t;
 
 typedef struct vm_return_t {
     int status; // 0 == success, -1 erreur

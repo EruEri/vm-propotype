@@ -6,11 +6,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define INSTRUCTION_BITS_WIDTH 32
-#define INSTRUCTION_OPCODE_WIDTH 5
+#define HALT_BITS 0x0
+#define RET_BITS 0x01
+#define SYSCALL_BITS 0x2
+#define CALL_BITS 0x3
 
-const uint32_t OPCODE_MASK = 0xF8000000;
-const uint32_t SHIFT_OPCODE = INSTRUCTION_BITS_WIDTH - INSTRUCTION_OPCODE_WIDTH;
+#define opcode_value(instruction) \
+    (((uint32_t) instruction & OPCODE_MASK) >> (INSTRUCTION_SIZE - OPCODE_SIZE))
+
+#define is_set(instruction, mask) \
+    ((instruction & mask) == mask)
 
 vm_t* vm_init(const instruction_t *const code, uint64_t stack_size, uint64_t offset) {
     vm_t* vm_ptr = malloc(sizeof(vm_t));
@@ -63,23 +68,50 @@ reg_t* register_of_int32(vm_t* vm, uint32_t bits, uint32_t shift) {
     default:
         failwith("Wrong register number", 1);
     }
-
     return (void *) 0;
 }
 
+int halt_opcode(vm_t* vm, instruction_t i) {
+    switch ((i >> 28) & 0x3) {
+        case HALT:{
+            return 0;
+        }
+        case RET_BITS: {
+            return 0;
+        }
+
+        case SYSCALL_BITS: {
+            return 0;
+        }
+
+        case CALL_BITS: {
+            return 0;
+        }
+    }
+
+    return -1;
+} 
+
+int not_opcode(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 25);
+    bool_t is_register = (instruction >> 24) & 1;
+    if (is_register) {
+        reg_t* src = register_of_int32(vm, instruction, 19);
+        *dst = -(*src);
+    } else {
+
+    }
+    return 0;
+}
+
 uint32_t signed_extend21(uint32_t litteral, bool_t is_signed_extend) {
-    const uint32_t bits_21_mask = 0x00200000;
-    const uint32_t ten_first_mask = 0xFFC00000;
-    if (litteral & bits_21_mask) {
-        return ten_first_mask | litteral;
+    const uint32_t bits_21_mask = 0x00100000;
+    const uint32_t eleven_first_mask = 0xFFE00000;
+    if (is_set(litteral, bits_21_mask)) {
+        return eleven_first_mask | litteral;
     } else {
         return litteral;
     }
-}
-
-instruction_set_t instr_set_from_instr(instruction_t instruction) {
-    uint32_t masked_instructions_bits = instruction & OPCODE_MASK;
-    return masked_instructions_bits >> SHIFT_OPCODE;
 }
 
 void mov_instruction(vm_t* vm, instruction_t instruction) {
@@ -111,14 +143,10 @@ int vm_run(vm_t* vm){
 
     while (true) {
         instruction_t instruction = fetch_instruction(vm);
-        instruction_set_t ist = instr_set_from_instr(instruction);
+        opcode_t ist = opcode_value(instruction);
         switch (ist) { 
             case HALT:
-                return 0; 
-            case MOV:
-                mov_instruction(vm, instruction);
-                continue;
-            case ARI:
+                return halt_opcode(vm, instruction); 
             default:
                 fprintf(stderr, "Unknown opcode %u\n", ist);
                 failwith("", 1);
