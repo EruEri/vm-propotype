@@ -11,11 +11,18 @@
 #define SYSCALL_BITS 0x2
 #define CALL_BITS 0x3
 
+#define REG_ONLY_MASK 0x1F
+
 #define opcode_value(instruction) \
     (((uint32_t) instruction & OPCODE_MASK) >> (INSTRUCTION_SIZE - OPCODE_SIZE))
 
 #define is_set(instruction, mask) \
     ((instruction & mask) == mask)
+
+#define mask_bit(n) \
+    (1 << n)
+
+uint64_t signed_extend21(instruction_t instruction, bool_t is_signed_extend);
 
 vm_t* vm_init(const instruction_t *const code, uint64_t stack_size, uint64_t offset) {
     vm_t* vm_ptr = malloc(sizeof(vm_t));
@@ -32,7 +39,7 @@ instruction_t fetch_instruction(vm_t* vm) {
 }
 
 reg_t* register_of_int32(vm_t* vm, uint32_t bits, uint32_t shift) {
-    switch (bits >> shift) {
+    switch ((bits >> shift) & REG_ONLY_MASK) {
     case 0:
         return &vm->r0;
     case 1:
@@ -93,49 +100,58 @@ int halt_opcode(vm_t* vm, instruction_t i) {
 } 
 
 int not_opcode(vm_t* vm, instruction_t instruction) {
-    reg_t* dst = register_of_int32(vm, instruction, 25);
-    bool_t is_register = (instruction >> 24) & 1;
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    bool_t is_register = (instruction >> 21) & 1;
     if (is_register) {
-        reg_t* src = register_of_int32(vm, instruction, 19);
-        *dst = -(*src);
+        reg_t* src = register_of_int32(vm, instruction, 16);
+        *dst = ~(*src);
     } else {
-
+        bool_t is_signed = is_set(instruction, mask_bit(20));
+        uint64_t value = signed_extend21(instruction, is_signed);
+        *dst = ~value;
     }
     return 0;
 }
 
-uint32_t signed_extend21(uint32_t litteral, bool_t is_signed_extend) {
+int neg_opcode(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    bool_t is_register = (instruction >> 21) & 1;
+    if (is_register) {
+        reg_t* src = register_of_int32(vm, instruction, 16);
+        *dst = -(*src);
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(20));
+        uint64_t value = signed_extend21(instruction, is_signed);
+        *dst = -value;
+    }
+    return 0;
+}
+
+int mv_opcode(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    bool_t is_register = (instruction >> 21) & 1;
+    if (is_register) {
+        reg_t* src = register_of_int32(vm, instruction, 16);
+        *dst = (*src);
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(20));
+        uint64_t value = signed_extend21(instruction, is_signed);
+        *dst = value;
+    }
+    return 0;
+}
+
+uint64_t signed_extend21(instruction_t instruction, bool_t is_signed_extend) {
     const uint32_t bits_21_mask = 0x00100000;
     const uint32_t eleven_first_mask = 0xFFE00000;
+    const uint32_t litteral = instruction & (~eleven_first_mask);
+
     if (is_set(litteral, bits_21_mask)) {
-        return eleven_first_mask | litteral;
+        int64_t n = eleven_first_mask | litteral;
+        return n;
     } else {
         return litteral;
     }
-}
-
-void mov_instruction(vm_t* vm, instruction_t instruction) {
-    const uint32_t is_litteral_mask = 0x04000000;
-    const uint32_t is_signed_extended_mask = 0x02000000;
-    const uint32_t register_destination_mask = 0x01E00000;
-    const uint32_t register_origin_mask = 0x001E0000;
-    const uint32_t litteral_src_origin = 0x001FFFFF;
-    reg_t* dst = register_of_int32(
-            vm, instruction & register_destination_mask, 
-            21);
-
-    if (instruction & is_litteral_mask) {
-        uint32_t litteral = instruction & litteral_src_origin;
-        litteral = signed_extend21(litteral, instruction & is_signed_extended_mask);
-        *dst = litteral;
-    } else {
-
-        reg_t* src = register_of_int32(
-            vm, instruction & register_origin_mask, 
-            17);
-            *dst = *src;
-    }
-    printf("register value = %lld\n", ((int64_t) *dst) );
 }
 
 
@@ -147,6 +163,12 @@ int vm_run(vm_t* vm){
         switch (ist) { 
             case HALT:
                 return halt_opcode(vm, instruction); 
+            case MVNOT:
+                return not_opcode(vm, instruction);
+            case MVNEG:
+                return neg_opcode(vm, instruction);
+            case MOV:
+                return mv_opcode(vm, instruction);
             default:
                 fprintf(stderr, "Unknown opcode %u\n", ist);
                 failwith("", 1);
