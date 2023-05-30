@@ -1,6 +1,7 @@
 #include "vm.h"
 #include "stack.h"
 #include "util.h"
+#include <_types/_uint32_t.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,8 @@
 #define SYSCALL_BITS 0x2
 #define CALL_BITS 0x3
 
+
+#define SHIFT_ONLY_MASK 0x3
 #define REG_ONLY_MASK 0x1F
 
 #define opcode_value(instruction) \
@@ -23,6 +26,7 @@
     (1 << n)
 
 uint64_t signed_extend21(instruction_t instruction, bool_t is_signed_extend);
+uint64_t signed_extend18(instruction_t instruction, bool_t is_signed_extend);
 
 vm_t* vm_init(const instruction_t *const code, uint64_t stack_size, uint64_t offset) {
     vm_t* vm_ptr = malloc(sizeof(vm_t));
@@ -141,13 +145,40 @@ int mv_opcode(vm_t* vm, instruction_t instruction) {
     return 0;
 }
 
+int mva(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    uint8_t shift = ((instruction >> 20) & SHIFT_ONLY_MASK) * 16;
+    bool_t is_reg = is_set(instruction, mask_bit(19));
+    if (is_reg) {
+        reg_t* src = register_of_int32(vm, instruction, 14);
+        *dst = *dst | ( *src << shift);
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(18));
+        uint64_t value = signed_extend18(instruction, is_signed);
+        *dst = *dst | (value << shift);
+    } 
+    return 0;
+}
+
 uint64_t signed_extend21(instruction_t instruction, bool_t is_signed_extend) {
-    const uint32_t bits_21_mask = 0x00100000;
+    const uint32_t bits_21_mask = mask_bit(21);
     const uint32_t eleven_first_mask = 0xFFE00000;
     const uint32_t litteral = instruction & (~eleven_first_mask);
 
     if (is_set(litteral, bits_21_mask)) {
         int64_t n = eleven_first_mask | litteral;
+        return n;
+    } else {
+        return litteral;
+    }
+}
+
+uint64_t signed_extend18(instruction_t instruction, bool_t is_signed_extend) {
+    const uint32_t fourteen_first_mask = 0xFFFA0000;
+    const uint32_t litteral = instruction & ~fourteen_first_mask;
+
+    if (is_set(instruction, mask_bit(18))) {
+        int64_t n = fourteen_first_mask | litteral;
         return n;
     } else {
         return litteral;
