@@ -15,6 +15,8 @@
 
 #define SHIFT_ONLY_MASK 0x3
 #define REG_ONLY_MASK 0x1F
+#define CC_ONLY_MASK 0xF
+#define BR_JMP_MASK 0X3
 
 #define opcode_value(instruction) \
     (((uint32_t) instruction & OPCODE_MASK) >> (INSTRUCTION_SIZE - OPCODE_SIZE))
@@ -25,21 +27,74 @@
 #define mask_bit(n) \
     (1 << n)
 
-uint64_t signed_extend21(instruction_t instruction, bool_t is_signed_extend);
-uint64_t signed_extend18(instruction_t instruction, bool_t is_signed_extend);
-
 vm_t* vm_init(const instruction_t *const code, uint64_t stack_size, uint64_t offset) {
     vm_t* vm_ptr = malloc(sizeof(vm_t));
     if (!vm_ptr) failwith("Vm alloc fail", 1);
     vm_stack_t* stack = stack_create(stack_size);
     const instruction_t* ip = code + offset;
-    vm_t vm = {.stack = stack, .code = code, .ip = ip, .fp = stack->sp};
+    vm_t vm = {.stack = stack, .code = code, .ip = ip, .fp = stack->sp, .last_cmp = false};
     memcpy(vm_ptr, &vm, sizeof(vm_t));
     return vm_ptr;
 }
 
 instruction_t fetch_instruction(vm_t* vm) {
     return *(vm->ip++);
+}
+
+int64_t signed_extend25(instruction_t instruction, bool_t is_sign_extended) {
+    const uint32_t seven_first_mask = 0xFE000000;
+    const uint32_t litteral = instruction & (~seven_first_mask);
+    if (is_set(instruction, mask_bit(25))) {
+        return seven_first_mask | litteral;
+    } else {
+        return litteral;
+    }
+}
+
+int64_t signed_extend22(instruction_t instruction, bool_t is_signed_extend) {
+    const uint32_t bits_22_mask = mask_bit(22);
+    const uint32_t ten_first_mask = 0xFFC00000;
+    const uint32_t litteral = instruction & (~ten_first_mask);
+
+    if (is_set(litteral, bits_22_mask)) {
+        return ten_first_mask | litteral;
+    } else {
+        return litteral;
+    }
+}
+
+int64_t signed_extend21(instruction_t instruction, bool_t is_signed_extend) {
+    const uint32_t bits_21_mask = mask_bit(21);
+    const uint32_t eleven_first_mask = 0xFFE00000;
+    const uint32_t litteral = instruction & (~eleven_first_mask);
+
+    if (is_set(litteral, bits_21_mask)) {
+        return eleven_first_mask | litteral;
+    } else {
+        return litteral;
+    }
+}
+
+int64_t signed_extend18(instruction_t instruction, bool_t is_signed_extend) {
+    const uint32_t fourteen_first_mask = 0xFFFA0000;
+    const uint32_t litteral = instruction & ~fourteen_first_mask;
+
+    if (is_set(instruction, mask_bit(18))) {
+        return fourteen_first_mask | litteral;
+    } else {
+        return litteral;
+    }
+}
+
+int64_t signed_extend16(instruction_t instruction, bool_t is_signed_extend) {
+    const uint32_t sixteen_first_mask = 0xFFFF0000;
+    const uint32_t litteral = instruction & ~sixteen_first_mask;
+
+    if (is_set(instruction, mask_bit(16))) {
+        return sixteen_first_mask | litteral;
+    } else {
+        return litteral;
+    }
 }
 
 reg_t* register_of_int32(vm_t* vm, uint32_t bits, uint32_t shift) {
@@ -103,21 +158,21 @@ int halt_opcode(vm_t* vm, instruction_t i) {
     return -1;
 } 
 
-int not_opcode(vm_t* vm, instruction_t instruction) {
-    reg_t* dst = register_of_int32(vm, instruction, 22);
-    bool_t is_register = (instruction >> 21) & 1;
+int mvnt(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 27);
+    bool_t is_register = (instruction >> 26) & 1;
     if (is_register) {
-        reg_t* src = register_of_int32(vm, instruction, 16);
+        reg_t* src = register_of_int32(vm, instruction, 21);
         *dst = ~(*src);
     } else {
-        bool_t is_signed = is_set(instruction, mask_bit(20));
-        uint64_t value = signed_extend21(instruction, is_signed);
+        bool_t is_signed = is_set(instruction, mask_bit(25));
+        int64_t value = signed_extend21(instruction, is_signed);
         *dst = ~value;
     }
     return 0;
 }
 
-int neg_opcode(vm_t* vm, instruction_t instruction) {
+int mvng(vm_t* vm, instruction_t instruction) {
     reg_t* dst = register_of_int32(vm, instruction, 22);
     bool_t is_register = (instruction >> 21) & 1;
     if (is_register) {
@@ -125,13 +180,13 @@ int neg_opcode(vm_t* vm, instruction_t instruction) {
         *dst = -(*src);
     } else {
         bool_t is_signed = is_set(instruction, mask_bit(20));
-        uint64_t value = signed_extend21(instruction, is_signed);
+        int64_t value = signed_extend21(instruction, is_signed);
         *dst = -value;
     }
     return 0;
 }
 
-int mv_opcode(vm_t* vm, instruction_t instruction) {
+int mv(vm_t* vm, instruction_t instruction) {
     reg_t* dst = register_of_int32(vm, instruction, 22);
     bool_t is_register = (instruction >> 21) & 1;
     if (is_register) {
@@ -139,7 +194,7 @@ int mv_opcode(vm_t* vm, instruction_t instruction) {
         *dst = (*src);
     } else {
         bool_t is_signed = is_set(instruction, mask_bit(20));
-        uint64_t value = signed_extend21(instruction, is_signed);
+        int64_t value = signed_extend21(instruction, is_signed);
         *dst = value;
     }
     return 0;
@@ -154,40 +209,232 @@ int mva(vm_t* vm, instruction_t instruction) {
         *dst = *dst | ( *src << shift);
     } else {
         bool_t is_signed = is_set(instruction, mask_bit(18));
-        uint64_t value = signed_extend18(instruction, is_signed);
+        int64_t value = signed_extend18(instruction, is_signed);
         *dst = *dst | (value << shift);
     } 
     return 0;
 }
 
-uint64_t signed_extend21(instruction_t instruction, bool_t is_signed_extend) {
-    const uint32_t bits_21_mask = mask_bit(21);
-    const uint32_t eleven_first_mask = 0xFFE00000;
-    const uint32_t litteral = instruction & (~eleven_first_mask);
-
-    if (is_set(litteral, bits_21_mask)) {
-        int64_t n = eleven_first_mask | litteral;
-        return n;
+int br(vm_t* vm, instruction_t instruction) {
+    bool_t is_branch_link = is_set(instruction, mask_bit(26));
+    bool_t is_register = is_set(instruction, mask_bit(25));
+    if (is_register) {
+       reg_t* src = register_of_int32(vm, instruction, 20);
+       if (is_branch_link) {
+            vm->fp = (reg_t) vm->ip;
+       }
+       vm->ip = vm->code + *src;
     } else {
-        return litteral;
+        bool_t is_signed = is_set(instruction, mask_bit(24));
+        int64_t value = signed_extend25(instruction, is_signed);
+        if (is_branch_link) {
+            vm->fp = (reg_t) vm->ip;
+        }
+        vm->ip = vm->ip + value;
+    }
+
+    return 0;
+}
+
+int lea(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    bool_t is_signed = is_set(instruction, mask_bit(21));
+    int64_t value = signed_extend22(instruction, is_signed);
+    *dst = (reg_t) vm->ip + value;
+    return 0;
+}
+
+int add(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = *src + *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src + value;
+    }
+    return 0;
+}
+
+
+int sub(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = *src - *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src - value;
+    }
+    return 0;
+}
+
+int mult(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = *src * *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src * value;
+    }
+    return 0;
+}
+
+int idiv(vm_t* vm, instruction_t instruction) {
+    return -1;
+}
+
+int mod(vm_t* vm, instruction_t instruction) {
+    return -1;
+}
+
+
+int iand(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = *src & *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src & value;
+    }
+    return 0;
+}
+
+int ior(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = *src | *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src | value;
+    }
+    return 0;
+}
+
+int ixor(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = *src ^ *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src ^ value;
+    }
+    return 0;
+}
+
+int ilsl(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = *src << *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src << value;
+    }
+    return 0;
+}
+
+int iasr(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = ((int64_t) *src) >> *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src << value;
+    }
+    return 0;
+}
+
+int ilsr(vm_t* vm, instruction_t instruction) {
+    reg_t* dst = register_of_int32(vm, instruction, 22);
+    reg_t* src = register_of_int32(vm, instruction, 17);
+    bool_t is_register = is_set(instruction, mask_bit(16));
+    if (is_register) {
+        reg_t* src2 = register_of_int32(vm, instruction, 11);
+        *dst = ((uint64_t) *src) >> *src2;
+    } else {
+        bool_t is_signed = is_set(instruction, mask_bit(15));
+        int64_t value = signed_extend16(instruction, is_signed);
+        *dst = *src << value;
+    }
+    return 0;
+}
+
+bool_t cmp_value(condition_code_t cc, reg_t lhs, reg_t rhs) {
+    switch (cc) {
+    case ALWAYS:
+        return true;
+    case EQUAL:
+        return lhs == rhs;
+    case DIFF:
+        return lhs != rhs;
+    case SUP:
+        return (int64_t) lhs > (int64_t) rhs;
+    case UNSIGNED_SUP:
+        return lhs > rhs;
+    case SUPEQ:
+        return (int64_t) lhs >= (int64_t) rhs;
+    case UNSIGNED_SUPEQ:
+        return lhs >= rhs;
+    case INF:
+        return (int64_t) lhs < (int64_t) rhs;
+    case UNSIGNED_INF:
+        return lhs < rhs;
+    case INFEQ:
+        return (int64_t) lhs <= (int64_t) rhs;
+    case UNSIGNED_INFEQ:
+        return lhs <= rhs;
+    default:
+        return false;
     }
 }
 
-uint64_t signed_extend18(instruction_t instruction, bool_t is_signed_extend) {
-    const uint32_t fourteen_first_mask = 0xFFFA0000;
-    const uint32_t litteral = instruction & ~fourteen_first_mask;
-
-    if (is_set(instruction, mask_bit(18))) {
-        int64_t n = fourteen_first_mask | litteral;
-        return n;
+int cmp(vm_t* vm, instruction_t instruction) {
+    condition_code_t cc = (instruction >> 5) & CC_ONLY_MASK;
+    bool_t is_cset = is_set(instruction, mask_bit(23));
+    reg_t* reg1 = register_of_int32(vm, instruction, 22);
+    reg_t* reg2 = register_of_int32(vm, instruction, 17);
+    bool_t value = cmp_value(cc, *reg1, *reg2);
+    if (is_cset) {
+        reg_t* reg3 = register_of_int32(vm, instruction, 12);
+        *reg3 = value;
     } else {
-        return litteral;
+        vm->last_cmp = value;
     }
-}
 
+    return 0;
+}
 
 int vm_run(vm_t* vm){
-
     while (true) {
         instruction_t instruction = fetch_instruction(vm);
         opcode_t ist = opcode_value(instruction);
@@ -195,11 +442,57 @@ int vm_run(vm_t* vm){
             case HALT:
                 return halt_opcode(vm, instruction); 
             case MVNOT:
-                return not_opcode(vm, instruction);
+                mvnt(vm, instruction);
+                break;
             case MVNEG:
-                return neg_opcode(vm, instruction);
+                mvng(vm, instruction);
+                break;
             case MOV:
-                return mv_opcode(vm, instruction);
+                mv(vm, instruction);
+                break;
+            case BR_JUMP:
+                br(vm, instruction);
+                break;
+            case LEA:
+                lea(vm, instruction);
+                break;
+            case ADD:
+                add(vm, instruction);
+                break;
+            case SUB:
+                sub(vm, instruction);
+                break;
+            case MULT:
+                mult(vm, instruction);
+                break;
+            case DIV:
+                idiv(vm, instruction);
+                break;
+            case MOD:
+                mod(vm, instruction);
+                break;
+            case AND:
+                iand(vm, instruction);
+                break;
+            case OR:    
+                ior(vm, instruction);
+                break;
+            case XOR:
+                ixor(vm, instruction);
+                break;
+            case LSL:
+                ilsl(vm, instruction);
+                break;
+            case ASR:
+                iasr(vm, instruction);
+                break;
+            case LSR:
+                ilsr(vm, instruction);
+                break;
+            case CMP:
+            case CSET:
+                cmp(vm, instruction);
+                break;
             default:
                 fprintf(stderr, "Unknown opcode %u\n", ist);
                 failwith("", 1);

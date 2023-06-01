@@ -3,6 +3,7 @@
 
 
 #include "stack.h"
+#include "util.h"
 #include <stdint.h>
 
 // 
@@ -47,10 +48,10 @@ typedef enum {
     HALT = 0,
     MVNOT = 1,
     MVNEG = 2,
-    MOV,
-    MVA,
-    BR_JUMP,
-    LEA,
+    MOV = 3,
+    MVA = 4,
+    BR_JUMP = 5,
+    LEA = 6,
     ADD,
     SUB,
     MULT,
@@ -75,8 +76,12 @@ typedef enum {
     DIFF,
     SUP,
     UNSIGNED_SUP,
+    SUPEQ,
+    UNSIGNED_SUPEQ,
     INF,
-    UNSIGNED_INF
+    UNSIGNED_INF,
+    INFEQ,
+    UNSIGNED_INFEQ
 } condition_code_t;
 
 
@@ -90,6 +95,7 @@ typedef struct vm_return_t {
 
 typedef struct {
     instruction_t const * const code;
+    bool_t last_cmp;
     const instruction_t* ip;
     vm_stack_t* stack;
     reg_t fp;
