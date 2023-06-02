@@ -38,7 +38,7 @@ int show_reg(const char* regname, reg_t reg, bool_t is_float) {
     if (is_float) {
         printf("%s = %f\n", regname, double_of_bits(reg));
     } else {
-        printf("%s = %llu\n", regname, reg);
+        printf("%s = %lld\n", regname, reg);
     }
 
     return 0;
