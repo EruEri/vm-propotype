@@ -1,7 +1,7 @@
 #include "vm.h"
 #include "stack.h"
 #include "util.h"
-#include <_types/_uint32_t.h>
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,14 +18,53 @@
 #define CC_ONLY_MASK 0xF
 #define BR_JMP_MASK 0X3
 
+const uint32_t VM_OPCODE_MASK = 0b11111000000000000000000000000000;
+const uint32_t VM_INSTRUCTION_SIZE = 32;
+const uint32_t VM_OPCODE_SIZE = 5;
+const uint32_t VM_CONDITION_CODE_SIZE = 4;
+const uint32_t VM_REGISTER_SIZE = 5;
+
 #define opcode_value(instruction) \
-    (((uint32_t) instruction & OPCODE_MASK) >> (INSTRUCTION_SIZE - OPCODE_SIZE))
+    (((uint32_t) instruction & VM_OPCODE_MASK) >> (VM_INSTRUCTION_SIZE - VM_OPCODE_SIZE))
 
 #define is_set(instruction, mask) \
     ((instruction & mask) == mask)
 
 #define mask_bit(n) \
     (1 << n)
+
+
+int show_reg(const char* regname, reg_t reg, bool_t is_float) {
+    if (is_float) {
+        printf("%s = %f\n", regname, double_of_bits(reg));
+    } else {
+        printf("%s = %llu\n", regname, reg);
+    }
+
+    return 0;
+}
+
+int show_status(vm_t* vm) {
+    printf("last_cmp = %u\n", vm->last_cmp);
+    printf("ip = %p\n", vm->ip - (uint64_t) vm->code);
+    printf("fp = %p\n", (void *) vm->fp);
+    printf("sc = %llu\n", vm->sc);
+    printf("ir = %p\n", (void *) vm->sc);
+    show_reg("r0", vm->r0, false);
+    show_reg("r1", vm->r1, false);
+    show_reg("r2", vm->r2, false);
+    show_reg("r3", vm->r3, false);
+    show_reg("r4", vm->r4, false);
+
+    show_reg("f0", vm->fr0, true);
+    show_reg("f1", vm->fr1, true);
+    show_reg("f2", vm->fr2, true);
+    show_reg("f3", vm->fr3, true);
+    show_reg("f4", vm->fr4, true);
+
+
+    return 0;
+}
 
 vm_t* vm_init(const instruction_t *const code, uint64_t stack_size, uint64_t offset) {
     vm_t* vm_ptr = malloc(sizeof(vm_t));
@@ -498,6 +537,8 @@ int vm_run(vm_t* vm){
                 failwith("", 1);
             break;
         }
+
+        show_status(vm);
     }
     return 0;
 }

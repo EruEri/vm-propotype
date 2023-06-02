@@ -38,12 +38,6 @@ typedef uint64_t reg_t;
 typedef uint64_t freg_t;
 typedef uint32_t instruction_t;
 
-const uint32_t OPCODE_MASK = 0b11111000000000000000000000000000;
-const uint32_t INSTRUCTION_SIZE = 32;
-const uint32_t OPCODE_SIZE = 5;
-const uint32_t CONDITION_CODE_SIZE = 4;
-const uint32_t REGISTER_SIZE = 5;
-
 typedef enum {
     HALT = 0,
     MVNOT = 1,
@@ -140,6 +134,7 @@ typedef struct {
 
 
 vm_t* vm_init(instruction_t const * const code, uint64_t stack_size, uint64_t offset); 
+int show_status(vm_t* vm);
 int vm_run(vm_t* vm);
 void free_vm(vm_t* vm);
 #endif
