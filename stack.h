@@ -5,7 +5,7 @@
 #include "util.h"
 
 typedef struct {
-    uint64_t* const memory;
+    uint8_t* const memory;
     const uint64_t size;
     uint64_t sp;
 } vm_stack_t;

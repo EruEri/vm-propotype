@@ -78,6 +78,18 @@ typedef enum {
     UNSIGNED_INFEQ
 } condition_code_t;
 
+typedef enum {
+    S8,
+    S16,
+    S32,
+    S64
+} data_size_t;
+
+typedef enum {
+    SUCCESS,
+    STOP,
+    LDR_ERROR,
+} vm_status_kind_t;
 
 typedef struct vm_return_t {
     int status; // 0 == success, -1 erreur
