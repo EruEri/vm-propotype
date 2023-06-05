@@ -20,7 +20,7 @@ vm_stack_t* stack_create(uint64_t size) {
     uint64_t alligned_size = align8(size);
     uint64_t alloc_size = alligned_size * sizeof(uint64_t);
 
-    uint64_t* memory = malloc(alloc_size);
+    uint8_t* memory = malloc(alloc_size);
     if (!memory) failwith("Malloc failed", 1);
     vm_stack_t stack = {.memory = memory, .size = alligned_size, .sp = 0};
     memcpy(stack_ptr, &stack, sizeof(vm_stack_t));

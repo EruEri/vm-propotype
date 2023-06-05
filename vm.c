@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #define HALT_BITS 0x0
 #define RET_BITS 0x01
@@ -188,9 +190,23 @@ reg_t* register_of_int32(vm_t* vm, uint32_t bits, uint32_t shift) {
     return (void *) 0;
 }
 
-int halt_opcode(vm_t* vm, instruction_t i) {
-    switch ((i >> 28) & 0x3) {
+int isyscall(vm_t* vm, instruction_t instruction) {
+
+    #ifndef __APPLE__
+        vm->r0 = __syscall(vm->sc, vm->r0, vm->r1, vm->r2, vm->r3, vm->r4, vm->r5);
+    #else
+        // Find a way since [syscall] is deprecated on macOS and __syscall doesnt exist
+        // Maybe inline asm for x86_64 and arm64 
+        vm->r0 = -1;
+    #endif
+    return 0;
+}
+
+int halt_opcode(vm_t* vm, instruction_t instruction, bool_t* halt) {
+    if (halt) *halt = false;
+    switch ((instruction >> 25) & 0x3) {
         case HALT: {
+            if (halt) *halt = true;
             return 0;
         }
         case RET_BITS: {
@@ -198,7 +214,7 @@ int halt_opcode(vm_t* vm, instruction_t i) {
         }
 
         case SYSCALL_BITS: {
-            return 0;
+            return isyscall(vm, instruction);
         }
 
         case CALL_BITS: {
@@ -416,7 +432,7 @@ int iasr(vm_t* vm, instruction_t instruction) {
         *dst = ((int64_t) *src) >> *src2;
     } else {
         int64_t value = sext16(instruction);
-        *dst = *src << value;
+        *dst = ((int64_t) *src) >> value;
     }
     return 0;
 }
@@ -430,7 +446,7 @@ int ilsr(vm_t* vm, instruction_t instruction) {
         *dst = ((uint64_t) *src) >> *src2;
     } else {
         int64_t value = sext16(instruction);
-        *dst = *src << value;
+        *dst = ((uint64_t) *src) >> value;
     }
     return 0;
 }
@@ -485,6 +501,22 @@ int ldr(vm_t* vm, instruction_t instruction) {
     reg_t* dst = register_of_int32(vm, instruction, 19);
     reg_t* base = register_of_int32(vm, instruction, 14);
     int64_t offset = sext14(instruction);
+    switch (ds) {
+    case S8:
+        *dst = *((uint8_t*) base + offset);
+        break;
+    case S16:
+        *dst = *((uint16_t*) base + offset);
+        break;
+    case S32:
+        *dst = *((uint32_t*) base + offset);
+        break;
+    case S64:
+        *dst = *((uint64_t*) base + offset);
+      break;
+    }
+
+    return 0;
 }
 
 int str(vm_t* vm, instruction_t instruction) {
@@ -492,6 +524,22 @@ int str(vm_t* vm, instruction_t instruction) {
     reg_t* src = register_of_int32(vm, instruction, 19);
     reg_t* base = register_of_int32(vm, instruction, 14);
     int64_t offset = sext14(instruction);
+    switch (ds) {
+    case S8:
+        *((uint8_t*) base + offset) = (uint8_t) *src;
+        break;
+    case S16:
+        *((uint16_t*) base + offset) = (uint16_t) *src;
+        break;
+    case S32:
+        *((uint32_t*) base + offset) = (uint32_t) *src;
+        break;
+    case S64:
+        *((uint64_t*) base + offset) = (uint64_t) *src;
+        break;
+    }
+
+    return 0;
 }
 
 int ldr_str(vm_t* vm, instruction_t instruction) {
@@ -504,8 +552,14 @@ int vm_run(vm_t* vm){
         instruction_t instruction = fetch_instruction(vm);
         opcode_t ist = opcode_value(instruction);
         switch (ist) { 
-            case HALT:
-                return halt_opcode(vm, instruction); 
+            case HALT: {
+                bool_t b;
+                int status = halt_opcode(vm, instruction, &b);
+                if (b) {
+                    return status;
+                } 
+                break;
+            }
             case MVNOT:
                 mvnt(vm, instruction);
                 break;

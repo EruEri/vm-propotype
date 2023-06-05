@@ -3,11 +3,12 @@
 
 #include <stdint.h>
 #include "util.h"
+#include "vm_base.h"
 
 typedef struct {
     uint8_t* const memory;
     const uint64_t size;
-    uint64_t sp;
+    reg_t sp;
 } vm_stack_t;
 
 vm_stack_t* stack_create(uint64_t size);

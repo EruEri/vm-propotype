@@ -1,42 +1,10 @@
 #ifndef VM_H
 #define VM_H
 
-
+#include "vm_base.h"
 #include "stack.h"
 #include "util.h"
 #include <stdint.h>
-
-// 
-// Mov
-// 0000_1 
-// Opcode 5bits
-// Src litteral 1 bit // 1 vrai - 0 faux
-// signed extend 1 : 1 vrai - 0 faux
-// Reg dest = 4 bits
-// reg 4 bits | src 21 bits sign extend
-
-// Movn 
-// 0001_0 
-// OpCode 5bits
-// Src litteral 1 bits // 1 - 0
-// Rotation = 6 bits
-// Reg dest = 4 bits
-// reg 4 bits |  src 16 bits
-
-// ARI
-// 0001_1
-// OpCode 5bits
-// Src litteral 1 bits  1 vrai - 0 faux
-// is_signed 1 : 1 vrai - 0 faux
-// Op_arithmetic: 3 bits
-// Destination: 4 bits
-// Reg 4 bits | src 18 bits
-
-// + - * / >> << % 
-
-typedef uint64_t reg_t;
-typedef uint64_t freg_t;
-typedef uint32_t instruction_t;
 
 typedef enum {
     HALT = 0,
